@@ -1,0 +1,14 @@
+/neural-ai-env/
+/saved_models/
+/TesteDeAudio/
+/TesteDeImagem/
+/TreinoDeAudio/
+/TreinoDeImagem/
+/scriptload/load_image/
+/dataset/
+/archive/
+/dataset_fold/
+/Img/
+/dados/
+/dados_imagens/
+**/__pycache__/
