@@ -322,7 +322,7 @@ class NeuralAI:
         self.prediction_global = self.model.predict(imagem_teste)
         val_max = np.max(self.prediction_global)
 
-        if (val_max >= self.threshold):
+        if (val_max >= self.threshold): 
             prediction = self.prediction_global.argmax(axis=1)
             prediction = prediction.astype(int).flatten()
             prediction = self.labelencoder.inverse_transform((prediction))
@@ -330,18 +330,25 @@ class NeuralAI:
             duration = datetime.now() - start
             if prediction in classe_:
                 previsao_bool = (self.prediction_global > self.threshold)
-                print("\n###############################################\n")
-                print(f'Classificação/resultado geral: {self.prediction_global}\nValor boleano: {previsao_bool}\n')
-                print(f'Classificação: {prediction} Confiança: {val_max}')
-                print('Duração da predição: ', duration)
-                print(f'Precisão modelo (acurácia): {self.precisao_val[1]}\nErro do modelo (loss val): {self.precisao_val[0]}')
-                print("\n###############################################\n")
+                if info:
+                    print("\n###############################################\n")
+                    print(f'Classificação/resultado geral: {self.prediction_global}\nValor boleano: {previsao_bool}\n')
+                    print(f'Classificação: {prediction} Confiança: {val_max}')
+                    print('Duração da predição: ', duration)
+                    if self.precisao_val is not None:
+                        print(f'Precisão modelo (acurácia): {self.precisao_val[1]}\nErro do modelo (loss val): {self.precisao_val[0]}')
+                    else:
+                        print('Precisão do modelo não disponível.')
+                    print("\n###############################################\n")
+                return True
             else:
-                print(f'Classe {classe_} não encontrada')
-
+                if info:
+                    print(f'Classe {classe_} não encontrada')
+                return False
         else:
-            print('Nenhuma classe com confiança aceitável.')
-
+            if info:
+                print('Nenhuma classe com confiança aceitável.')
+            return False
 
         # base_treinamento.class_indices
 
@@ -357,7 +364,7 @@ if __name__ == '__main__':
 
     # cliente.connect()
 
-    meta.neural_load_model(indice=0)
+    meta.neural_load_model(indice=3)
     arqui = ''
     while arqui.upper() != 'Q':
         arqui = input("Favor por o path da imagem ou 'Q' para sair.\n")
@@ -367,4 +374,4 @@ if __name__ == '__main__':
         if arqui.upper() != 'Q':
             print('==============================================\n\n')
             meta.predict_image(arqui, info=True, classe_=classe)
- 
+  

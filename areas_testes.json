@@ -1,0 +1,12 @@
+[
+    {
+        "classe_passa": "cachorro",
+        "classe_nao_passa": "gato",
+        "point": "0",
+        "threshold": 0.5,
+        "x": 8,
+        "y": 6,
+        "width": 483,
+        "height": 488
+    }
+]

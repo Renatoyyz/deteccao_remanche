@@ -195,30 +195,43 @@ class ImageCropper(QWidget):
                 self.image_label.set_crop_rect(self.crop_rect)
                 # Se modo seleção estiver ativo, pede nome da classe e salva área
                 if self.selection_mode and not self.crop_rect.isNull():
-                    class_name, ok = QInputDialog.getText(self, "Classe da Área", "Digite o nome da classe para esta área:")
-                    if ok and class_name:
-                        label_size = self.image_label.size()
-                        pixmap_size = self.original_pixmap.size()
-                        scaled_pixmap = self.original_pixmap.scaled(label_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                        display_size = scaled_pixmap.size()
-                        offset_x = (label_size.width() - display_size.width()) // 2
-                        offset_y = (label_size.height() - display_size.height()) // 2
-                        crop_x = self.crop_rect.x() - offset_x
-                        crop_y = self.crop_rect.y() - offset_y
-                        crop_x = max(0, crop_x)
-                        crop_y = max(0, crop_y)
-                        scale_x = pixmap_size.width() / display_size.width()
-                        scale_y = pixmap_size.height() / display_size.height()
-                        area_coords = {
-                            "class": class_name,
-                            "x": int(crop_x * scale_x),
-                            "y": int(crop_y * scale_y),
-                            "width": int(self.crop_rect.width() * scale_x),
-                            "height": int(self.crop_rect.height() * scale_y)
-                        }
-                        self.areas.append(area_coords)
-                        self.update_areas_rects()
-                        QMessageBox.information(self, "Área Adicionada", f"Classe: {class_name}\nCoordenadas: {area_coords}")
+                    classe_passa, ok1 = QInputDialog.getText(self, "Classe que PASSA", "Digite o nome da classe que indica que a peça PASSA nesta área:")
+                    if not ok1 or not classe_passa:
+                        return
+                    classe_nao_passa, ok2 = QInputDialog.getText(self, "Classe que NÃO PASSA", "Digite o nome da classe que indica que a peça NÃO PASSA nesta área:")
+                    if not ok2 or not classe_nao_passa:
+                        return
+                    point_name, ok3 = QInputDialog.getText(self, "Nome do Ponto", "Digite o nome do ponto para esta área:")
+                    if not ok3 or not point_name:
+                        return
+                    threshold, ok4 = QInputDialog.getDouble(self, "Threshold de Acurácia", "Digite o threshold para detecção (0.0 a 1.0):", 0.5, 0.0, 1.0, 2)
+                    if not ok4:
+                        return
+                    label_size = self.image_label.size()
+                    pixmap_size = self.original_pixmap.size()
+                    scaled_pixmap = self.original_pixmap.scaled(label_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    display_size = scaled_pixmap.size()
+                    offset_x = (label_size.width() - display_size.width()) // 2
+                    offset_y = (label_size.height() - display_size.height()) // 2
+                    crop_x = self.crop_rect.x() - offset_x
+                    crop_y = self.crop_rect.y() - offset_y
+                    crop_x = max(0, crop_x)
+                    crop_y = max(0, crop_y)
+                    scale_x = pixmap_size.width() / display_size.width()
+                    scale_y = pixmap_size.height() / display_size.height()
+                    area_coords = {
+                        "classe_passa": classe_passa,
+                        "classe_nao_passa": classe_nao_passa,
+                        "point": point_name,
+                        "threshold": float(threshold),
+                        "x": int(crop_x * scale_x),
+                        "y": int(crop_y * scale_y),
+                        "width": int(self.crop_rect.width() * scale_x),
+                        "height": int(self.crop_rect.height() * scale_y)
+                    }
+                    self.areas.append(area_coords)
+                    self.update_areas_rects()
+                    QMessageBox.information(self, "Área Adicionada", f"Classe PASSA: {classe_passa}\nClasse NÃO PASSA: {classe_nao_passa}\nPonto: {point_name}\nThreshold: {threshold}\nCoordenadas: {area_coords}")
     def clear_areas(self):
         self.areas = []
         self.update_areas_rects()
