@@ -1,4 +1,8 @@
 /neural-ai-env/
+remanche_image/
+/remanche_fold_image/
+/temp/
+/dataset_fold_remanche/
 /saved_models/
 /TesteDeAudio/
 /TesteDeImagem/
@@ -10,5 +14,4 @@
 /dataset_fold/
 /Img/
 /dados/
-/dados_imagens/
 **/__pycache__/

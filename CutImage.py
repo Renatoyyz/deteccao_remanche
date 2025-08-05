@@ -36,6 +36,49 @@ class CropLabel(QLabel):
             painter.drawRect(self.crop_rect)
 
 class ImageCropper(QWidget):
+    def capture_image(self):
+        try:
+            import cv2
+        except ImportError:
+            QMessageBox.warning(self, "Erro", "OpenCV (cv2) não está instalado. Instale com 'pip install opencv-python'.")
+            return
+        cam_index, ok = QInputDialog.getInt(self, "Escolher Câmera", "Digite o índice da câmera (normalmente 0, 1...):", 0, 0, 10, 1)
+        if not ok:
+            return
+        cap = cv2.VideoCapture(cam_index)
+        if not cap.isOpened():
+            QMessageBox.warning(self, "Erro", f"Não foi possível abrir a câmera de índice {cam_index}.")
+            return
+        QMessageBox.information(self, "Captura", "Pressione 's' para capturar a foto e fechar a janela.")
+        temp_path = None
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                QMessageBox.warning(self, "Erro", "Não foi possível capturar imagem da câmera.")
+                cap.release()
+                return
+            cv2.imshow("Captura de Foto", frame)
+            key = cv2.waitKey(1)
+            if key == ord('s'):
+                temp_path = "captured_image_temp.png"
+                cv2.imwrite(temp_path, frame)
+                break
+            elif key == 27:
+                cap.release()
+                cv2.destroyAllWindows()
+                return
+        cap.release()
+        cv2.destroyAllWindows()
+        if temp_path:
+            self.image_path = temp_path
+            self.original_pixmap = QPixmap(self.image_path)
+            self.image_label.setPixmap(self.original_pixmap.scaled(
+                self.image_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.save_button.setEnabled(True)
+            self.image_label.setText("")
+            self.crop_rect = QRect()
+            self.image_label.set_crop_rect(QRect())
+            self.update_areas_rects()
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Cropper de Imagem")
@@ -84,50 +127,55 @@ class ImageCropper(QWidget):
         layout.addWidget(self.clear_button)
 
         self.setLayout(layout)
-    def capture_image(self):
-        try:
-            import cv2
-        except ImportError:
-            QMessageBox.warning(self, "Erro", "OpenCV (cv2) não está instalado. Instale com 'pip install opencv-python'.")
-            return
-        # Pergunta o índice da câmera
-        cam_index, ok = QInputDialog.getInt(self, "Escolher Câmera", "Digite o índice da câmera (normalmente 0, 1...):", 0, 0, 10, 1)
-        if not ok:
-            return
-        cap = cv2.VideoCapture(cam_index)
-        if not cap.isOpened():
-            QMessageBox.warning(self, "Erro", f"Não foi possível abrir a câmera de índice {cam_index}.")
-            return
-        QMessageBox.information(self, "Captura", "Pressione 's' para capturar a foto e fechar a janela.")
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                QMessageBox.warning(self, "Erro", "Não foi possível capturar imagem da câmera.")
-                cap.release()
-                return
-            cv2.imshow("Captura de Foto", frame)
-            key = cv2.waitKey(1)
-            if key == ord('s'):
-                # Salva imagem temporária
-                temp_path = "captured_image_temp.png"
-                cv2.imwrite(temp_path, frame)
-                break
-            elif key == 27:  # ESC
-                cap.release()
-                cv2.destroyAllWindows()
-                return
-        cap.release()
-        cv2.destroyAllWindows()
-        # Carrega imagem capturada
-        self.image_path = temp_path
-        self.original_pixmap = QPixmap(self.image_path)
-        self.image_label.setPixmap(self.original_pixmap.scaled(
-            self.image_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        self.save_button.setEnabled(True)
-        self.image_label.setText("")
-        self.crop_rect = QRect()
-        self.image_label.set_crop_rect(QRect())
-        self.update_areas_rects()
+    def init_ui(self):
+        layout = QVBoxLayout()
+        self.image_label = CropLabel(self)
+        self.image_label.setText("Nenhuma imagem carregada")
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setStyleSheet("border: 2px solid gray;")
+        layout.addWidget(self.image_label)
+
+        self.load_button = QPushButton("Carregar Imagem")
+        self.load_button.clicked.connect(self.load_image)
+        layout.addWidget(self.load_button)
+
+        self.capture_button = QPushButton("Tirar Foto")
+        self.capture_button.clicked.connect(self.capture_image)
+        layout.addWidget(self.capture_button)
+
+        self.selection_checkbox = QCheckBox("Modo Seleção de Áreas")
+        self.selection_checkbox.stateChanged.connect(self.toggle_selection_mode)
+        layout.addWidget(self.selection_checkbox)
+
+        self.select_folder_button = QPushButton("Selecionar Pasta de Destino")
+        self.select_folder_button.clicked.connect(self.select_folder)
+        layout.addWidget(self.select_folder_button)
+
+        self.save_button = QPushButton("Salvar Área Selecionada")
+        self.save_button.clicked.connect(self.save_cropped_image)
+        self.save_button.setEnabled(False)
+        layout.addWidget(self.save_button)
+
+        self.save_json_button = QPushButton("Salvar Áreas em JSON")
+        self.save_json_button.clicked.connect(self.save_areas_json)
+        layout.addWidget(self.save_json_button)
+
+        self.clear_button = QPushButton("Limpar Áreas Selecionadas")
+        self.clear_button.clicked.connect(self.clear_areas)
+        layout.addWidget(self.clear_button)
+
+        self.setLayout(layout)
+
+        self.selected_folder = None
+
+    def select_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Escolher Pasta para Salvar", "")
+        if folder:
+            self.selected_folder = folder
+            QMessageBox.information(self, "Pasta Selecionada", f"Pasta de destino definida:\n{folder}")
+        else:
+            self.selected_folder = None
+            QMessageBox.warning(self, "Aviso", "Nenhuma pasta selecionada.")
     def update_areas_rects(self):
         # Atualiza a visualização das áreas já selecionadas
         rects = []
@@ -240,37 +288,61 @@ class ImageCropper(QWidget):
         if self.original_pixmap and not self.crop_rect.isNull():
             label_size = self.image_label.size()
             pixmap_size = self.original_pixmap.size()
-            # Calcula o tamanho da imagem exibida
             scaled_pixmap = self.original_pixmap.scaled(label_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             display_size = scaled_pixmap.size()
-            # Calcula o offset da imagem dentro do QLabel
             offset_x = (label_size.width() - display_size.width()) // 2
             offset_y = (label_size.height() - display_size.height()) // 2
-            # Ajusta as coordenadas do crop_rect para considerar o offset
             crop_x = self.crop_rect.x() - offset_x
             crop_y = self.crop_rect.y() - offset_y
             crop_x = max(0, crop_x)
             crop_y = max(0, crop_y)
-            # Calcula o fator de escala
             scale_x = pixmap_size.width() / display_size.width()
             scale_y = pixmap_size.height() / display_size.height()
-            # Calcula o retângulo de corte na imagem original
             crop = QRect(
                 int(crop_x * scale_x),
                 int(crop_y * scale_y),
                 int(self.crop_rect.width() * scale_x),
                 int(self.crop_rect.height() * scale_y)
             )
-            # Garante que o retângulo está dentro dos limites da imagem
             crop = crop.intersected(QRect(0, 0, pixmap_size.width(), pixmap_size.height()))
             cropped = self.original_pixmap.copy(crop)
-            # Permite ao usuário escolher o nome do arquivo e pasta
-            file_path, _ = QFileDialog.getSaveFileName(self, "Salvar Imagem Cortada", "area_cortada.png", "Imagens (*.png *.jpg *.jpeg)")
-            if file_path:
-                cropped.save(file_path)
-                QMessageBox.information(self, "Sucesso", f"Área salva em:\n{file_path}")
-            else:
-                QMessageBox.warning(self, "Aviso", "Nenhum nome de arquivo fornecido.")
+
+            # Realce de contornos metálicos
+            from PyQt5.QtGui import QImage
+            import numpy as np
+            import cv2
+            cropped_img = cropped.toImage()
+            width = cropped_img.width()
+            height = cropped_img.height()
+            ptr = cropped_img.bits()
+            ptr.setsize(cropped_img.byteCount())
+            arr = np.array(ptr).reshape(height, width, 4)
+            arr_rgb = cv2.cvtColor(arr, cv2.COLOR_BGRA2BGR)
+            gray = cv2.cvtColor(arr_rgb, cv2.COLOR_BGR2GRAY)
+            # Equalização para destacar metal
+            eq = cv2.equalizeHist(gray)
+            # Canny para contornos
+            edges = cv2.Canny(eq, 120, 250)
+            # Mescla bordas destacadas com imagem original
+            arr_rgb[edges > 0] = [0, 0, 255]  # borda vermelha
+            out_img = cv2.cvtColor(arr_rgb, cv2.COLOR_BGR2RGB)
+            out_qimg = QImage(out_img.data, width, height, 3*width, QImage.Format_RGB888)
+            out_pixmap = QPixmap.fromImage(out_qimg)
+
+            # Usar pasta previamente selecionada
+            folder = self.selected_folder
+            if not folder:
+                QMessageBox.warning(self, "Aviso", "Nenhuma pasta de destino definida. Selecione uma pasta antes de salvar.")
+                return
+
+            base_name = os.path.basename(folder)
+            existing = [f for f in os.listdir(folder) if f.startswith(base_name) and f.endswith(('.png', '.jpg', '.jpeg'))]
+            next_num = len(existing) + 1
+            file_name = f"{base_name}_{next_num}.png"
+            file_path = os.path.join(folder, file_name)
+
+            out_pixmap.save(file_path)
+            QMessageBox.information(self, "Sucesso", f"Área salva em:\n{file_path}\n(Contornos metálicos destacados)")
         else:
             QMessageBox.warning(self, "Aviso", "Nenhuma área selecionada.")
 

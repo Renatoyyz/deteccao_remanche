@@ -54,25 +54,21 @@ class NeuralAI:
 
     def convolutional(self, num_classes = None):
         self.model = Sequential()
-
-        self.model.add(Conv2D(64, kernel_size=(10, 10), activation='relu', input_shape=(64, 64, 3)))
+        # Camadas otimizadas para imagens pequenas (40x40)
+        self.model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(40, 40, 3)))
         self.model.add(BatchNormalization())
-        # self.model.add(Dropout(0.4))
         self.model.add(MaxPooling2D(pool_size=(2, 2)))
 
-        self.model.add(Conv2D(64, kernel_size=(10, 10), padding='same', activation='relu'))
+        self.model.add(Conv2D(64, kernel_size=(3, 3), padding='same', activation='relu'))
         self.model.add(BatchNormalization())
-        # self.model.add(Dropout(0.4))
         self.model.add(MaxPooling2D(pool_size=(2, 2)))
 
         self.model.add(Flatten())
-
-        self.model.add(Dense(units=64, activation='relu'))
+        self.model.add(Dense(units=32, activation='relu'))
         self.model.add(Dropout(0.2))
-        self.model.add(Dense(units=64, activation='relu'))
+        self.model.add(Dense(units=16, activation='relu'))
         self.model.add(Dropout(0.2))
-        self.model.add(Dense(units=num_classes, activation='softmax'))  # Camada de saída densa que sempre vai ser de acordo com a quantidade de classes
-        # self.model.add(Activation('softmax'))
+        self.model.add(Dense(units=num_classes, activation='softmax'))
 
         self.model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
         self.model.summary()
@@ -139,7 +135,7 @@ class NeuralAI:
         print(f'Precisão base teste: {self.precisao_val[1]}\nLoss base teste: {self.precisao_val[0]}\n')
 
     # num_batch_size = 32 = de 32 em 32 audios paraserem treinados
-    def neural_training_kfold(self, dados_k_fold = r"dados/",num_classes = None, n_split = 10, num_epochs=80, num_batch_size=32, arqui_train=r'dataset_fold/train', arqui_test=r'dataset_fold/test'):
+    def neural_training_kfold(self, dados_k_fold = r"dados/",num_classes = None, n_split = 10, num_epochs=80, num_batch_size=32, arqui_train=r'dataset_fold/train/', arqui_test=r'dataset_fold/test'):
 
         src = dados_k_fold
         # Esse comando garante que se pegue somente os diretórios, pois, as vezes, pode-se ter arquivos ou arquivos ocultos como .DS_Store
@@ -161,12 +157,14 @@ class NeuralAI:
 
         for f in files_dados:   
             dir_loc = os.path.join(src, f)
-            files_loc = [d for d in os.listdir(dir_loc) if os.path.isfile(os.path.join(dir_loc, d)) and ('.jpg' or '.jpeg' or '.png') in os.path.join(dir_loc, d)  ]
-           
+            files_loc = [d for d in os.listdir(dir_loc) if os.path.isfile(os.path.join(dir_loc, d)) and ('.jpg' in d or '.jpeg' in d or '.png' in d)]
             files_loc_np = np.array(files_loc)
+            if files_loc_np.shape[0] == 0:
+                print(f'AVISO: Classe "{f}" não possui imagens, será ignorada.')
+                continue
             list_data_treino.update( {f'{f}':[]} )
             list_data_teste.update( {f'{f}':[]} )
-            for indice_treinamento, indice_teste in kfold.split(files_loc_np, np.zeros(shape = (files_loc_np.shape[0], 1))):
+            for indice_treinamento, indice_teste in kfold.split(files_loc_np, np.zeros(shape = (files_loc_np.shape[0], ))):
                 list_data_treino[f'{f}'].append(indice_treinamento)
                 list_data_teste[f'{f}'].append(indice_teste)
 
@@ -180,102 +178,98 @@ class NeuralAI:
 
         for cl in [*list_data_treino]:
             dir_loc = os.path.join(src, cl)
-            files_loc = [d for d in os.listdir(dir_loc) if os.path.isfile(os.path.join(dir_loc, d)) and ('.jpg' or '.jpeg' or '.png') in os.path.join(dir_loc, d) ]
-            # d = [f for f in os.listdir(src+l+'/') if os.path.isfile(os.path.join(src+l+'/', f)) and ('.jpg' or '.jpeg' or '.png') in os.path.join(src+l+'/', f) ]
+            files_loc = [d for d in os.listdir(dir_loc) if os.path.isfile(os.path.join(dir_loc, d)) and ('.jpg' in d or '.jpeg' in d or '.png' in d)]
             files_loc_np = np.array(files_loc)
-            
             t = len(list_data_treino[f'{cl}'])
             for index in range(t):
-
-                arquivo_train = 'dataset_fold/train/'+f'dataset{index}/'+cl
+                if files_loc_np.shape[0] == 0:
+                    print(f'AVISO: Split {index} da classe "{cl}" está vazio, será ignorado.')
+                    continue
+                arquivo_train = os.path.join(arqui_train, f'dataset{index}', cl)
                 if not os.path.isdir(arquivo_train):
                     os.makedirs(arquivo_train)
-
-                arquivo_test = 'dataset_fold/test/'+f'dataset{index}/'+cl
+                arquivo_test = os.path.join(arqui_test, f'dataset{index}', cl)
                 if not os.path.isdir(arquivo_test):
                     os.makedirs(arquivo_test)
-
                 treino = list_data_treino[f'{cl}'][index]
                 test = list_data_teste[f'{cl}'][index]
-
+                # Verifica se os índices estão dentro do limite
+                if np.max(treino) >= files_loc_np.shape[0] or np.max(test) >= files_loc_np.shape[0]:
+                    print(f'AVISO: Split {index} da classe "{cl}" possui índices fora do limite, será ignorado.')
+                    continue
                 for arq in files_loc_np[treino]:
                     shutil.copy(dir_loc+'/'+f'{arq}', arquivo_train)
                 for arq in files_loc_np[test]:
                     shutil.copy(dir_loc+'/'+f'{arq}', arquivo_test)
 
         source_train_fold = arqui_train
-        source_train_fold_ = [f for f in os.listdir(source_train_fold) if os.path.isdir(os.path.join(source_train_fold, f))]
         source_test_fold = arqui_test
+        # Garante que os diretórios existem antes de listar
+        if not os.path.isdir(source_train_fold):
+            os.makedirs(source_train_fold)
+        if not os.path.isdir(source_test_fold):
+            os.makedirs(source_test_fold)
+        source_train_fold_ = [f for f in os.listdir(source_train_fold) if os.path.isdir(os.path.join(source_train_fold, f))]
         source_test_fold_ = [f for f in os.listdir(source_test_fold) if os.path.isdir(os.path.join(source_test_fold, f))]
 
         tx = []
-
+        if len(source_train_fold_) == 0 or len(source_test_fold_) == 0:
+            print('AVISO: Nenhum diretório de treino/teste válido foi criado. Verifique se há imagens suficientes nas classes para o KFold.')
+            return
         for index in range(len(source_train_fold_)):
-
             self.convolutional(num_classes=num_classes)
             self.gerador_treinamento = ImageDataGenerator(
-                                                        rescale=1./255,
-                                                        rotation_range=7,
-                                                        horizontal_flip=True,
-                                                        shear_range=0.2,
-                                                        height_shift_range=0.07,
-                                                        zoom_range=0.2
-                                                        )
+                rescale=1./255,
+                rotation_range=5,
+                horizontal_flip=True,
+                shear_range=0.1,
+                height_shift_range=0.05,
+                width_shift_range=0.05,
+                zoom_range=0.1
+            )
             self.gerador_teste = ImageDataGenerator(rescale=1./255)
-
             source_loc = source_train_fold+'/'+source_train_fold_[index]+'/'
-
-            self.base_treinamento = self.gerador_treinamento.flow_from_directory(source_loc,
-                                                                                target_size=(64, 64),
-                                                                                batch_size=num_batch_size,
-                                                                                class_mode='categorical')
-                        
+            self.base_treinamento = self.gerador_treinamento.flow_from_directory(
+                source_loc,
+                target_size=(40, 40),
+                batch_size=num_batch_size,
+                class_mode='categorical')
             source_loc = source_test_fold+'/'+source_test_fold_[index]+'/'
-            self.base_teste = self.gerador_teste.flow_from_directory(source_loc,
-                                                                    target_size=(64, 64),
-                                                                    batch_size=num_batch_size,
-                                                                    class_mode='categorical')
-
-
+            self.base_teste = self.gerador_teste.flow_from_directory(
+                source_loc,
+                target_size=(40, 40),
+                batch_size=num_batch_size,
+                class_mode='categorical')
+            if self.base_treinamento.samples == 0 or self.base_teste.samples == 0:
+                print(f'AVISO: Split {index} está vazio após separação. Treinamento ignorado para este split.')
+                continue
             for chave in self.base_treinamento.class_indices.keys():
                 self.img_list.append(chave)
-
             np.savetxt(f'label_encoder_img_fold-{index}.txt', self.img_list, fmt='%s')
             self.img_list.clear()
-
-            checkpointer = ModelCheckpoint(filepath=f'saved_models/image_classification_fold-{index}.hdf5', verbose=1,
+            from keras.callbacks import EarlyStopping
+            checkpointer = ModelCheckpoint(filepath=f'saved_models/image_classification_fold-{index}.keras', verbose=1,
                                         save_best_only=True)
+            earlystop = EarlyStopping(monitor='val_loss', patience=8, restore_best_weights=True)
             start = datetime.now()
-            # self.history = self.model.fit(x=self.X_train, y=self.Y_train , batch_size = num_batch_size, epochs = num_epochs, validation_data = (self.X_val, self.Y_val), callbacks = [checkpointer], verbose = 1)
-            # self.model.fit( self.base_treinamento, steps_per_epoch=self.base_treinamento.samples / num_batch_size,
-            #                epochs=num_epochs, validation_data=self.base_teste,
-            #                validation_steps=self.base_teste.samples / num_batch_size, callbacks=[checkpointer],
-            #                verbose=True)
-
-            # self.model.fit(self.base_treinamento, steps_per_epoch = 1,
-            #                     epochs = num_epochs, validation_data = self.base_teste,
-            #                     validation_steps = 1, callbacks=[checkpointer])
-            self.model.fit(self.base_treinamento, steps_per_epoch = int(self.base_treinamento.samples / num_batch_size),
-                                epochs = num_epochs, validation_data = self.base_teste,
-                                validation_steps = int(self.base_teste.samples / num_batch_size), callbacks=[checkpointer])
-
+            self.model.fit(
+                self.base_treinamento,
+                steps_per_epoch = max(1, int(self.base_treinamento.samples / num_batch_size)),
+                epochs = min(num_epochs, 50),
+                validation_data = self.base_teste,
+                validation_steps = max(1, int(self.base_teste.samples / num_batch_size)),
+                callbacks=[checkpointer, earlystop],
+                verbose=True
+            )
             duration = datetime.now() - start
             self.precisao = self.model.evaluate(self.base_treinamento)
             self.precisao_val = self.model.evaluate(self.base_teste)
-
             np.save(f'precisao_fold-{index}', self.precisao)
             np.save(f'precisao_val-{index}', self.precisao_val)
-
-            
-
-            tx.append([f'Precisão base treino - {index}: {self.precisao[1]}',f'Loss base treino - {index}: {self.precisao[0]}'])
-            tx.append([f'Precisão base teste - {index}: {self.precisao_val[1]}',f'Loss base teste - {index}: {self.precisao_val[0]}'])
-            tx.append(["###########################################################################################\n"])
-
-            
-
-            np.savetxt( f'info_kfolds.txt', tx, fmt='%s')
-
+            tx.append(f'Precisão base treino - {index}: {self.precisao[1]} | Loss base treino - {index}: {self.precisao[0]}')
+            tx.append(f'Precisão base teste - {index}: {self.precisao_val[1]} | Loss base teste - {index}: {self.precisao_val[0]}')
+            tx.append("###########################################################################################\n")
+            np.savetxt( f'info_kfolds.txt', np.array(tx), fmt='%s')
             print('Duração do treinamento: ', duration)
             print(f'Precisão base treino: {self.precisao[1]}\nLoss base treino: {self.precisao[0]}\n')
             print(f'Precisão base teste: {self.precisao_val[1]}\nLoss base teste: {self.precisao_val[0]}\n')    
@@ -313,10 +307,10 @@ class NeuralAI:
 
     def predict_image(self, arquivo_img, info=False, classe_=[]):
         imagem_teste = image.load_img(arquivo_img,
-                                      target_size=(64, 64))
+                                      target_size=(40, 40))
         imagem_teste = image.img_to_array(imagem_teste)
         imagem_teste /= 255  # Normalização
-        imagem_teste = np.expand_dims(imagem_teste, axis=0)  # Poe no formato do tensorflow (1, 64, 64, 3)
+        imagem_teste = np.expand_dims(imagem_teste, axis=0)  # Poe no formato do tensorflow (1, 40, 40, 3)
 
         start = datetime.now()
         self.prediction_global = self.model.predict(imagem_teste)
@@ -358,20 +352,28 @@ if __name__ == '__main__':
     # img = ['adults', 'children']
     meta = NeuralAI( threshold=0.5)
     # meta.neural_training(num_epochs=5,num_classes=2, num_batch_size=4, arqui_train='archive/train', arqui_test='archive/test')
-    # meta.neural_training_kfold( dados_k_fold='dados_/', num_classes=2, n_split=4, num_epochs=2, num_batch_size=16, arqui_train='dataset_fold/train', arqui_test='dataset_fold/test')
+    meta.neural_training_kfold(
+        dados_k_fold='remanche_image/',
+        num_classes=2,
+        n_split=4,
+        num_epochs=100,
+        num_batch_size=16,
+        arqui_train='dataset_fold_remanche/train',
+        arqui_test='dataset_fold_remanche/test'
+    )
 
-    # cliente = Service()
+    # # cliente = Service()
 
-    # cliente.connect()
+    # # cliente.connect()
 
-    meta.neural_load_model(indice=3)
-    arqui = ''
-    while arqui.upper() != 'Q':
-        arqui = input("Favor por o path da imagem ou 'Q' para sair.\n")
-        if arqui.upper() != 'Q':
-            classe = input("Favor digitar a classe que se deseja encontrar.\n")
-            classe = classe.split(',')
-        if arqui.upper() != 'Q':
-            print('==============================================\n\n')
-            meta.predict_image(arqui, info=True, classe_=classe)
+    # meta.neural_load_model(indice=3)
+    # arqui = ''
+    # while arqui.upper() != 'Q':
+    #     arqui = input("Favor por o path da imagem ou 'Q' para sair.\n")
+    #     if arqui.upper() != 'Q':
+    #         classe = input("Favor digitar a classe que se deseja encontrar.\n")
+    #         classe = classe.split(',')
+    #     if arqui.upper() != 'Q':
+    #         print('==============================================\n\n')
+    #         meta.predict_image(arqui, info=True, classe_=classe)
   
