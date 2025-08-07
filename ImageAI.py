@@ -54,21 +54,38 @@ class NeuralAI:
 
     def convolutional(self, num_classes = None):
         self.model = Sequential()
-        # Camadas otimizadas para imagens pequenas (40x40)
-        self.model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(40, 40, 3)))
+        # Bloco 1
+        self.model.add(Conv2D(32, (3, 3), activation='relu', padding='same', input_shape=(40, 40, 3)))
+        self.model.add(BatchNormalization())
+        self.model.add(Conv2D(32, (3, 3), activation='relu', padding='same'))
         self.model.add(BatchNormalization())
         self.model.add(MaxPooling2D(pool_size=(2, 2)))
+        self.model.add(Dropout(0.25))
 
-        self.model.add(Conv2D(64, kernel_size=(3, 3), padding='same', activation='relu'))
+        # Bloco 2
+        self.model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
+        self.model.add(BatchNormalization())
+        self.model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
         self.model.add(BatchNormalization())
         self.model.add(MaxPooling2D(pool_size=(2, 2)))
+        self.model.add(Dropout(0.30))
+
+        # Bloco 3
+        self.model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
+        self.model.add(BatchNormalization())
+        self.model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
+        self.model.add(BatchNormalization())
+        self.model.add(MaxPooling2D(pool_size=(2, 2)))
+        self.model.add(Dropout(0.35))
 
         self.model.add(Flatten())
-        self.model.add(Dense(units=32, activation='relu'))
-        self.model.add(Dropout(0.2))
-        self.model.add(Dense(units=16, activation='relu'))
-        self.model.add(Dropout(0.2))
-        self.model.add(Dense(units=num_classes, activation='softmax'))
+        self.model.add(Dense(256, activation='relu'))
+        self.model.add(BatchNormalization())
+        self.model.add(Dropout(0.5))
+        self.model.add(Dense(128, activation='relu'))
+        self.model.add(BatchNormalization())
+        self.model.add(Dropout(0.3))
+        self.model.add(Dense(num_classes, activation='softmax'))
 
         self.model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
         self.model.summary()
@@ -135,9 +152,12 @@ class NeuralAI:
         print(f'Precisão base teste: {self.precisao_val[1]}\nLoss base teste: {self.precisao_val[0]}\n')
 
     # num_batch_size = 32 = de 32 em 32 audios paraserem treinados
-    def neural_training_kfold(self, dados_k_fold = r"dados/",num_classes = None, n_split = 10, num_epochs=80, num_batch_size=32, arqui_train=r'dataset_fold/train/', arqui_test=r'dataset_fold/test'):
+    def neural_training_kfold(self, dados_k_fold = r"dados/",num_classes = None, n_split = 10, num_epochs=80, num_batch_size=32, arqui_train=r'dataset_fold/train/', arqui_test=r'dataset_fold/test/', arqui_models = r'saved_models/'):
 
         src = dados_k_fold
+        # Garante que o diretório de modelos existe
+        if not os.path.isdir(arqui_models):
+            os.makedirs(arqui_models)
         # Esse comando garante que se pegue somente os diretórios, pois, as vezes, pode-se ter arquivos ou arquivos ocultos como .DS_Store
         files_dados = [f for f in os.listdir(src) if os.path.isdir(os.path.join(src, f))]
         tamanho_dados = []
@@ -245,17 +265,17 @@ class NeuralAI:
                 continue
             for chave in self.base_treinamento.class_indices.keys():
                 self.img_list.append(chave)
-            np.savetxt(f'label_encoder_img_fold-{index}.txt', self.img_list, fmt='%s')
+            np.savetxt(f'{arqui_models}label_encoder_img_fold-{index}.txt', self.img_list, fmt='%s')
             self.img_list.clear()
             from keras.callbacks import EarlyStopping
-            checkpointer = ModelCheckpoint(filepath=f'saved_models/image_classification_fold-{index}.keras', verbose=1,
+            checkpointer = ModelCheckpoint(filepath=f'{arqui_models}image_classification_fold-{index}.keras', verbose=1,
                                         save_best_only=True)
-            earlystop = EarlyStopping(monitor='val_loss', patience=8, restore_best_weights=True)
+            earlystop = EarlyStopping(monitor='val_loss', patience=15, restore_best_weights=True)
             start = datetime.now()
             self.model.fit(
                 self.base_treinamento,
                 steps_per_epoch = max(1, int(self.base_treinamento.samples / num_batch_size)),
-                epochs = min(num_epochs, 50),
+                epochs = num_epochs,
                 validation_data = self.base_teste,
                 validation_steps = max(1, int(self.base_teste.samples / num_batch_size)),
                 callbacks=[checkpointer, earlystop],
@@ -264,12 +284,12 @@ class NeuralAI:
             duration = datetime.now() - start
             self.precisao = self.model.evaluate(self.base_treinamento)
             self.precisao_val = self.model.evaluate(self.base_teste)
-            np.save(f'precisao_fold-{index}', self.precisao)
-            np.save(f'precisao_val-{index}', self.precisao_val)
+            np.save(f'{arqui_models}precisao_fold-{index}', self.precisao)
+            np.save(f'{arqui_models}precisao_val-{index}', self.precisao_val)
             tx.append(f'Precisão base treino - {index}: {self.precisao[1]} | Loss base treino - {index}: {self.precisao[0]}')
             tx.append(f'Precisão base teste - {index}: {self.precisao_val[1]} | Loss base teste - {index}: {self.precisao_val[0]}')
             tx.append("###########################################################################################\n")
-            np.savetxt( f'info_kfolds.txt', np.array(tx), fmt='%s')
+            np.savetxt( f'{arqui_models}info_kfolds.txt', np.array(tx), fmt='%s')
             print('Duração do treinamento: ', duration)
             print(f'Precisão base treino: {self.precisao[1]}\nLoss base treino: {self.precisao[0]}\n')
             print(f'Precisão base teste: {self.precisao_val[1]}\nLoss base teste: {self.precisao_val[0]}\n')    
@@ -353,13 +373,14 @@ if __name__ == '__main__':
     meta = NeuralAI( threshold=0.5)
     # meta.neural_training(num_epochs=5,num_classes=2, num_batch_size=4, arqui_train='archive/train', arqui_test='archive/test')
     meta.neural_training_kfold(
-        dados_k_fold='remanche_image/',
-        num_classes=2,
-        n_split=4,
+        dados_k_fold='remanche_image2/',
+        num_classes=4,
+        n_split=6,
         num_epochs=100,
-        num_batch_size=16,
-        arqui_train='dataset_fold_remanche/train',
-        arqui_test='dataset_fold_remanche/test'
+        num_batch_size=4,
+        arqui_train='dataset_fold_remanche3/train',
+        arqui_test='dataset_fold_remanche3/test',
+        arqui_models='saved_models3/'
     )
 
     # # cliente = Service()

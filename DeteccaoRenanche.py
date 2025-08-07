@@ -25,7 +25,46 @@ class PredictFromCamera(QWidget):
         self.camera_index = 0
         self.areas = []
         self.neural_ai = None
+        self.config_file = "config_predicao.json"
         self.init_ui()
+        self.load_config()
+        self.auto_load_files_from_config()
+    def auto_load_files_from_config(self):
+        # Carrega arquivos automaticamente se os caminhos estiverem definidos
+        import os
+        if self.model_path and os.path.isfile(self.model_path):
+            self.neural_ai = NeuralAI(threshold=0.5)
+            self.neural_ai.model, _ = self.neural_ai.load_model_by_name(self.model_path)
+        if self.class_txt_path and os.path.isfile(self.class_txt_path):
+            try:
+                img_list = np.loadtxt(self.class_txt_path, dtype=str)
+                if isinstance(img_list, str):
+                    img_list = [img_list]
+                elif img_list is None or (hasattr(img_list, 'size') and img_list.size == 0):
+                    img_list = []
+                elif isinstance(img_list, np.ndarray):
+                    img_list = img_list.flatten().tolist()
+                if img_list:
+                    if not self.neural_ai:
+                        self.neural_ai = NeuralAI(threshold=0.5)
+                    self.neural_ai.img_list = img_list
+                    self.neural_ai.labelencoder.fit(self.neural_ai.img_list)
+            except Exception:
+                pass
+        if self.precisao_path and os.path.isfile(self.precisao_path):
+            if not self.neural_ai:
+                self.neural_ai = NeuralAI(threshold=0.5)
+            self.neural_ai.precisao = np.load(self.precisao_path)
+        if self.precisao_val_path and os.path.isfile(self.precisao_val_path):
+            if not self.neural_ai:
+                self.neural_ai = NeuralAI(threshold=0.5)
+            self.neural_ai.precisao_val = np.load(self.precisao_val_path)
+        if self.json_path and os.path.isfile(self.json_path):
+            try:
+                with open(self.json_path, "r", encoding="utf-8") as f:
+                    self.areas = json.load(f)
+            except Exception:
+                self.areas = []
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -87,7 +126,54 @@ class PredictFromCamera(QWidget):
 
         self.image_path = None
         self.captured_img = None
+        # Botão para salvar configurações
+        self.save_config_btn = QPushButton("Salvar Configurações")
+        self.save_config_btn.clicked.connect(self.save_config)
+        layout.addWidget(self.save_config_btn)
         self.setLayout(layout)
+    def save_config(self):
+        config = {
+            "model_path": self.model_path,
+            "class_txt_path": self.class_txt_path,
+            "precisao_path": self.precisao_path,
+            "precisao_val_path": self.precisao_val_path,
+            "json_path": self.json_path,
+            "camera_index": self.camera_index
+        }
+        file_path, _ = QFileDialog.getSaveFileName(self, "Salvar Configuração", self.config_file, "JSON (*.json)")
+        if file_path:
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, ensure_ascii=False, indent=4)
+            QMessageBox.information(self, "Sucesso", f"Configuração salva em:\n{file_path}")
+        else:
+            QMessageBox.warning(self, "Aviso", "Nenhum nome de arquivo fornecido.")
+
+    def load_config(self):
+        import os
+        if os.path.isfile(self.config_file):
+            try:
+                with open(self.config_file, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+                self.model_path = config.get("model_path", "")
+                self.class_txt_path = config.get("class_txt_path", "")
+                self.precisao_path = config.get("precisao_path", "")
+                self.precisao_val_path = config.get("precisao_val_path", "")
+                self.json_path = config.get("json_path", "")
+                self.camera_index = config.get("camera_index", 0)
+                # Atualiza status na interface
+                if self.model_path:
+                    self.status_label.setText(f"Modelo carregado: {os.path.basename(self.model_path)}")
+                if self.class_txt_path:
+                    self.status_label.setText(f"Arquivo de classes selecionado: {os.path.basename(self.class_txt_path)}")
+                if self.precisao_path:
+                    self.status_label.setText(f"Precisão selecionada: {os.path.basename(self.precisao_path)}")
+                if self.precisao_val_path:
+                    self.status_label.setText(f"Precisão Val selecionada: {os.path.basename(self.precisao_val_path)}")
+                if self.json_path:
+                    self.status_label.setText(f"Áreas JSON selecionadas: {os.path.basename(self.json_path)}")
+                self.camera_btn.setText(f"Selecionar Câmera (Atual: {self.camera_index})")
+            except Exception as e:
+                QMessageBox.warning(self, "Aviso", f"Falha ao carregar configuração: {e}")
 
     def draw_areas_on_pixmap(self, pixmap):
         if not pixmap or not self.areas:
@@ -124,8 +210,7 @@ class PredictFromCamera(QWidget):
             QMessageBox.warning(self, "Erro", "Nenhuma imagem de arquivo carregada.")
             return
         img = self.captured_img.copy()
-        nenhuma_conf_aceitavel = True
-        output_lines = []
+        pontos_nao_passou = []
         for area in self.areas:
             x, y, w, h = area["x"], area["y"], area["width"], area["height"]
             crop = img[y:y+h, x:x+w]
@@ -141,19 +226,17 @@ class PredictFromCamera(QWidget):
                 self.neural_ai.threshold = float(area["threshold"])
             else:
                 self.neural_ai.threshold = 0.5
-            # Checa se a predição retorna 'Nenhuma classe com confiança aceitável.'
-            pred_result = self.neural_ai.predict_image(temp_path, info=True, classe_=[area.get("class", "")])
-            if isinstance(pred_result, str) and "Nenhuma classe com confiança aceitável" in pred_result:
-                output_lines.append(f"Área {area.get('class','')} (Ponto: {area.get('point','')}, Threshold: {area.get('threshold',0.5)}): Nenhuma classe com confiança aceitável.")
-            else:
-                nenhuma_conf_aceitavel = False
-                output_lines.append(f"Área {area.get('class','')} (Ponto: {area.get('point','')}, Threshold: {area.get('threshold',0.5)}): {pred_result}")
+            # Verifica classe_nao_passa
+            if "classe_nao_passa" in area:
+                pred_nao_passa = self.neural_ai.predict_image(temp_path, info=True, classe_=[area["classe_nao_passa"]])
+                if pred_nao_passa:
+                    pontos_nao_passou.append(str(area.get('point','')))
         self.result_label.setText("Predição realizada. Veja terminal para detalhes.")
-        if nenhuma_conf_aceitavel:
-            output_lines.append("\nPeça passou: Nenhuma classe com confiança aceitável em todas as áreas.")
+        if not pontos_nao_passou:
+            self.output_text.setPlainText("Peça aprovada")
         else:
-            output_lines.append("\nPeça não passou: Alguma área teve classe com confiança aceitável.")
-        self.output_text.setPlainText("\n".join(output_lines))
+            texto = "\n".join([f"Ponto = {p} não passou" for p in pontos_nao_passou])
+            self.output_text.setPlainText(f"{texto}\nPeça não passou")
 
     def predict_on_camera(self):
         if not self.areas or not self.model_path:
@@ -194,9 +277,7 @@ class PredictFromCamera(QWidget):
             QMessageBox.warning(self, "Erro", "Nenhuma imagem disponível para predição.")
             return
         self.captured_img = img.copy()
-        encontrou_passa = False
-        encontrou_nao_passa = False
-        output_lines = []
+        pontos_nao_passou = []
         for area in self.areas:
             x, y, w, h = area["x"], area["y"], area["width"], area["height"]
             crop = img[y:y+h, x:x+w]
@@ -207,22 +288,17 @@ class PredictFromCamera(QWidget):
                 self.neural_ai.threshold = float(area["threshold"])
             else:
                 self.neural_ai.threshold = 0.5
-            if "classe_passa" in area:
-                pred_passa = self.neural_ai.predict_image(temp_path, info=True, classe_=[area["classe_passa"]])
-                if pred_passa:
-                    encontrou_passa = True
-                    output_lines.append(f"Área encontrada: Classe PASSA={area['classe_passa']}, Ponto={area.get('point','')}, Threshold={area.get('threshold',0.5)}")
+            # Verifica classe_nao_passa
             if "classe_nao_passa" in area:
                 pred_nao_passa = self.neural_ai.predict_image(temp_path, info=True, classe_=[area["classe_nao_passa"]])
                 if pred_nao_passa:
-                    encontrou_nao_passa = True
-                    output_lines.append(f"Área encontrada: Classe NÃO PASSA={area['classe_nao_passa']}, Ponto={area.get('point','')}, Threshold={area.get('threshold',0.5)}")
+                    pontos_nao_passou.append(str(area.get('point','')))
         self.result_label.setText("Predição realizada. Veja terminal para detalhes.")
-        if encontrou_passa and not encontrou_nao_passa:
-            output_lines.append("\nPeça passou: encontrou classe_passa e não encontrou classe_nao_passa.")
+        if not pontos_nao_passou:
+            self.output_text.setPlainText("Peça aprovada")
         else:
-            output_lines.append("\nPeça não passou: encontrou classe_nao_passa ou não encontrou classe_passa.")
-        self.output_text.setPlainText("\n".join(output_lines))
+            texto = "\n".join([f"Ponto = {p} não passou" for p in pontos_nao_passou])
+            self.output_text.setPlainText(f"{texto}\nPeça não passou")
 
     def select_model(self):
         path, _ = QFileDialog.getOpenFileName(self, "Selecionar Modelo", "", "Modelos Keras (*.keras)")
@@ -337,22 +413,27 @@ class PredictFromCamera(QWidget):
         cap.release()
         cv2.destroyAllWindows()
 
-        results = []
+        nenhuma_conf_aceitavel = True
+        pontos_nao_passou = []
         for area in self.areas:
             x, y, w, h = area["x"], area["y"], area["width"], area["height"]
             crop = img[y:y+h, x:x+w]
             crop_resized = cv2.resize(crop, self.model_input_size)
             temp_path = "temp_crop.png"
             cv2.imwrite(temp_path, crop_resized)
-            # Aplica o threshold da área
             if "threshold" in area:
                 self.neural_ai.threshold = float(area["threshold"])
             else:
                 self.neural_ai.threshold = 0.5
-            # Predição
-            pred = self.neural_ai.predict_image(temp_path, info=True, classe_=[area["class"]])
-            results.append(f'Área {area["class"]} (Ponto: {area.get("point","")}, Threshold: {area.get("threshold",0.5)}): veja terminal para detalhes')
+            pred_result = self.neural_ai.predict_image(temp_path, info=True, classe_=[area.get("class", "")])
+            if not (isinstance(pred_result, str) and "Nenhuma classe com confiança aceitável" in pred_result):
+                nenhuma_conf_aceitavel = False
+                pontos_nao_passou.append(str(area.get('point','')))
         self.result_label.setText("Predição realizada. Veja terminal para detalhes.")
+        if nenhuma_conf_aceitavel:
+            self.output_text.setPlainText("Peça passou: Nenhuma classe com confiança aceitável em todas as áreas.")
+        else:
+            self.output_text.setPlainText("\n".join([f"Ponto = {p} não passou" for p in pontos_nao_passou]))
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -1,0 +1,32 @@
+[
+    {
+        "classe_passa": "topo_v_ok",
+        "classe_nao_passa": "topo_v_nao_ok",
+        "point": "11",
+        "threshold": 0.5,
+        "x": 96,
+        "y": 206,
+        "width": 25,
+        "height": 26
+    },
+    {
+        "classe_passa": "topo_v_ok",
+        "classe_nao_passa": "topo_v_nao_ok",
+        "point": "13",
+        "threshold": 0.5,
+        "x": 77,
+        "y": 297,
+        "width": 23,
+        "height": 24
+    },
+    {
+        "classe_passa": "topo_v_ok",
+        "classe_nao_passa": "topo_v_nao_ok",
+        "point": "14",
+        "threshold": 0.5,
+        "x": 46,
+        "y": 323,
+        "width": 22,
+        "height": 27
+    }
+]

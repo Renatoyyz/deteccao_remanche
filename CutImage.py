@@ -160,6 +160,14 @@ class ImageCropper(QWidget):
         self.save_json_button.clicked.connect(self.save_areas_json)
         layout.addWidget(self.save_json_button)
 
+        self.load_areas_json_btn = QPushButton("Carregar Áreas de JSON")
+        self.load_areas_json_btn.clicked.connect(self.load_areas_from_json)
+        layout.addWidget(self.load_areas_json_btn)
+
+        self.save_all_areas_btn = QPushButton("Salvar Todas Áreas do JSON como Imagens")
+        self.save_all_areas_btn.clicked.connect(self.save_all_areas_from_json)
+        layout.addWidget(self.save_all_areas_btn)
+
         self.clear_button = QPushButton("Limpar Áreas Selecionadas")
         self.clear_button.clicked.connect(self.clear_areas)
         layout.addWidget(self.clear_button)
@@ -167,6 +175,63 @@ class ImageCropper(QWidget):
         self.setLayout(layout)
 
         self.selected_folder = None
+        self.loaded_areas_json = None
+    def load_areas_from_json(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Carregar Áreas de JSON", "areas.json", "JSON (*.json)")
+        if file_path:
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    self.loaded_areas_json = json.load(f)
+                QMessageBox.information(self, "Sucesso", f"Áreas carregadas de:\n{file_path}")
+            except Exception as e:
+                QMessageBox.warning(self, "Erro", f"Falha ao carregar JSON: {e}")
+        else:
+            self.loaded_areas_json = None
+
+    def save_all_areas_from_json(self):
+        if not self.loaded_areas_json:
+            QMessageBox.warning(self, "Aviso", "Nenhum arquivo de áreas JSON carregado.")
+            return
+        if not self.original_pixmap:
+            QMessageBox.warning(self, "Aviso", "Nenhuma imagem carregada.")
+            return
+        folder = self.selected_folder
+        if not folder:
+            QMessageBox.warning(self, "Aviso", "Nenhuma pasta de destino definida. Selecione uma pasta antes de salvar.")
+            return
+        pixmap_size = self.original_pixmap.size()
+        import os
+        existing_files = [f for f in os.listdir(folder) if f.endswith('.png')]
+        next_num = len(existing_files) + 1
+        base_name = os.path.basename(folder)
+        for idx, area in enumerate(self.loaded_areas_json):
+            crop_rect = QRect(area["x"], area["y"], area["width"], area["height"])
+            crop_rect = crop_rect.intersected(QRect(0, 0, pixmap_size.width(), pixmap_size.height()))
+            cropped = self.original_pixmap.copy(crop_rect)
+            # Realce de contornos metálicos
+            from PyQt5.QtGui import QImage
+            import numpy as np
+            import cv2
+            cropped_img = cropped.toImage()
+            width = cropped_img.width()
+            height = cropped_img.height()
+            ptr = cropped_img.bits()
+            ptr.setsize(cropped_img.byteCount())
+            arr = np.array(ptr).reshape(height, width, 4)
+            arr_rgb = cv2.cvtColor(arr, cv2.COLOR_BGRA2BGR)
+            gray = cv2.cvtColor(arr_rgb, cv2.COLOR_BGR2GRAY)
+            eq = cv2.equalizeHist(gray)
+            blur = cv2.GaussianBlur(eq, (3, 3), 0)
+            edges = cv2.Canny(blur, 120, 250)
+            arr_rgb[edges > 0] = [0, 0, 255]
+            out_img = cv2.cvtColor(arr_rgb, cv2.COLOR_BGR2RGB)
+            out_qimg = QImage(out_img.data, width, height, 3*width, QImage.Format_RGB888)
+            out_pixmap = QPixmap.fromImage(out_qimg)
+            file_name = f"{base_name}_area_{next_num}.png"
+            file_path = os.path.join(folder, file_name)
+            out_pixmap.save(file_path)
+            next_num += 1
+        QMessageBox.information(self, "Sucesso", f"Todas as áreas do JSON foram salvas como imagens na pasta:\n{folder}")
 
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Escolher Pasta para Salvar", "")

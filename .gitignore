@@ -1,9 +1,15 @@
 /neural-ai-env/
 remanche_image/
+/remanche_image2/
+/remanche_image3/
 /remanche_fold_image/
 /temp/
 /dataset_fold_remanche/
+/dataset_fold_remanche2/
+/dataset_fold_remanche3/
 /saved_models/
+/saved_models2/
+/saved_models3/
 /TesteDeAudio/
 /TesteDeImagem/
 /TreinoDeAudio/

@@ -1,0 +1,8 @@
+{
+    "model_path": "/Volumes/RenatoDados/deteccao_remanche/saved_models3/image_classification_fold-2.keras",
+    "class_txt_path": "/Volumes/RenatoDados/deteccao_remanche/saved_models3/label_encoder_img_fold-2.txt",
+    "precisao_path": "/Volumes/RenatoDados/deteccao_remanche/saved_models3/precisao_fold-2.npy",
+    "precisao_val_path": "/Volumes/RenatoDados/deteccao_remanche/saved_models3/precisao_val-2.npy",
+    "json_path": "/Volumes/RenatoDados/deteccao_remanche/areas_vertical_horizontal.json",
+    "camera_index": 0
+}
