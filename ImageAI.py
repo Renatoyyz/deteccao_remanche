@@ -378,9 +378,9 @@ if __name__ == '__main__':
         n_split=6,
         num_epochs=100,
         num_batch_size=4,
-        arqui_train='dataset_fold_remanche3/train',
-        arqui_test='dataset_fold_remanche3/test',
-        arqui_models='saved_models3/'
+        arqui_train='dataset_fold_remanche4/train',
+        arqui_test='dataset_fold_remanche4/test',
+        arqui_models='saved_models4/'
     )
 
     # # cliente = Service()
