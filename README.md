@@ -1,4 +1,4 @@
-# Neural AI Deteção de imagem e audio
+# Neural AI Detecção de Imagem e Áudio
 
 ## Pré-requisitos
 
@@ -10,7 +10,7 @@ virtualenv 20.4 ou superior
 
 ### Instalação
 
-Para fazer a instalação do requirements é necessario primeiramente criar um ambiente virtual para podermos utilizar o app.
+Para fazer a instalação do requirements é necessário primeiramente criar um ambiente virtual para podermos utilizar o app.
 
 **Linux**
 instalação do virtualenv:
@@ -54,79 +54,110 @@ brew install pyenv
 Para detalhes vá ao link:</br>
 [Como gerenciar diversas versões do Python e ambientes virtuais](https://www.freecodecamp.org/portuguese/news/como-gerenciar-diversas-versoes-do-python-e-ambientes-virtuais/)
 
-## Metadados
+---
 
-Cada arquivo de dados de imagem ou áudio é composto por:
+## Orientações e Processos Envolvidos
 
-* O nome tem o seguinte formato: [fsID]-[classID]-[occurrenceID]-[sliceID].wav, onde:
-  * [fsID] = é o ID do arquivo da imagem da qual este trecho (fatia) foi retirado.
-  * [classID] = um identificador numérico da classe a ser detectada. Como exemplo temos classes de som ambiente de um arquivo de dados tirado do site [Freesound](https://zenodo.org/record/1203745/files/UrbanSound8K.tar.gz) que vai de (0-9).
-    * 0 = ar_condicionado
-    * 1 = buzina_de_carro
-    * 2 = crianca_brincando
-    * 3 = latido_de_cachorro
-    * 4 = perfuracao
-    * 5 = motor_em_marcha_lenta
-    * 6 = tiro_de_arma
-    * 7 = britadeira
-    * 8 = sirene
-    * 9 = musica_de_rua
-  * [occurrenceID] = Um identificador numérico para distinguir diferentes ocorrências do som dentro da gravação original;
-  * [sliceID] = Um identificador numérico para distinguir diferentes fatias tiradas da mesma ocorrência;
+### Estrutura dos Dados e Metadados
 
-Essa estrutura pode ser usada tanto para audio quanto para imagem.
+- Os arquivos de imagem e áudio seguem o padrão `[fsID]-[classID]-[occurrenceID]-[sliceID].wav` ou `.png`.
+- As classes devem estar equilibradas, idealmente com mais de 45 imagens por classe para melhor desempenho em validação cruzada (KFold).
+- Estrutura de pastas recomendada:
+  - **saved_model**: Modelos treinados
+  - **TesteDeAudio** / **TesteDeImagem**: Dados de teste
+  - **TreinoDeAudio** / **TreinoDeImagem**: Dados de treino
 
-## Extrutura dos arquivos
+### Pré-processamento de Imagens
 
-* raiz
-  * **saved_model**: Para salvar os modelos treinados
-  * **TesteDeAudio**: Audios de testes
-  * **TesteDeImagem**: Imagens de testes
-  * **TreinoDeAudio**: Audios para treino
-  * **TreinoDeImagem**: Imagens para treino
+- **Normalização**: Todas as imagens são normalizadas com `rescale=1./255` no `ImageDataGenerator`.
+- **Equalização de Histograma**: Melhora o contraste das imagens, especialmente útil para destacar regiões metálicas.
+- **Gaussian Blur**: Suaviza a imagem e reduz ruídos antes da detecção de contornos.
+- **Canny**: Destaca os contornos das regiões metálicas, facilitando a diferenciação entre metal e plástico.
+- **Script de processamento em lote**: Para aplicar equalização, blur e Canny em todas as imagens de um diretório, utilize o script `processa_imagens.py`.
 
-### Criação da estrutura da rede neural
+### Treinamento do Modelo
 
-Os espectrogramas extraídos dos arquivos de áudio são como imagens 2D, então podemos usar técnicas de classificação de imagens neles, especificamente Redes Neurais Convolucionais (CNN)!
+- **Validação Cruzada (KFold)**: Recomenda-se usar `n_split=6` para datasets com mais de 45 imagens por classe.
+- **Arquitetura da Rede Neural**:
+  - Camadas convolucionais profundas com BatchNormalization, MaxPooling, Dropout e Dense.
+  - Função de ativação ReLU nas camadas ocultas e softmax na saída.
+  - Regularização com Dropout e L2 pode ser aplicada para evitar overfitting.
+- **Parâmetros de Treinamento**:
+  - `num_epochs=100` para permitir aprendizado suficiente.
+  - `EarlyStopping` com `patience=15` para evitar parada precoce.
+  - `num_batch_size=4` (pode ser ajustado conforme memória disponível).
+- **Monitoramento**:
+  - Salve os logs de precisão e loss por fold em arquivos como `info_kfolds.txt`.
+  - Escolha o melhor modelo pelo maior valor de precisão de teste e menor loss de teste.
 
-A arquitetura desta rede neural foi definida com base em alguns testes realizados para obter o resultado esperado. A estrutura pode ser ajustada livremente e comparada aos resultados desta estrutura.
+### Avaliação dos Modelos
 
-* Parâmetros:
-  * `Sequential`, é a classe para criar a rede neural, pois uma rede neural nada mais é que uma sequência de camadas (camada e entrada, camadas ocultas, camada de saída);  
-  * `kernel_size`, o tamanho do kernel (matriz) de convolução;
-  * `activation`, função de ativação;
-  * `input_shape`, na primeira camada este é o tamanho dos dados de entrada
-  * Camada `MaxPooling1D`, que vai fazer a extração das características principais;
-  * Camada `Conv1d`, uma rede neural convolucional que realiza a convolução ao longo de apenas uma dimensão;
-  * Camada `Flatten`, para transformar de matriz em vetor;
-  * Camada `Dense`, quando um neurônio de uma camada está ligado a todas os outros neurônios das outras camadas;
-  * `Dropout`, técnica de regularização para diminuir o overfitting: [Dropout](https://jmlr.org/papers/volume15/srivastava14a/srivastava14a.pdf)
-  * `padding='same'`, indica que adicionamos uma nova coluna composta por somente 0 (zeros) e utilizamos toda a imagem: [Padding](https://www.pico.net/kb/what-is-the-difference-between-same-and-valid-padding-in-tf-nn-max-pool-of-tensorflow/)
+- **Precisão**: Mede o percentual de acertos do modelo.
+- **Loss**: Mede o erro do modelo; quanto menor, melhor.
+- **Seleção do Melhor Modelo**: Escolha o modelo do fold com maior precisão de teste e menor loss de teste.
 
-  ![Convulutional](Img/convolutional.png)
+### Pós-processamento e Predição
 
-## Treinando o modelo
+- **Predição**: O sistema utiliza as áreas marcadas em JSON para recortar e processar as imagens antes da predição.
+- **Interface**: O resultado da predição mostra apenas os pontos que não passaram, facilitando a inspeção.
+- **Configuração**: As configurações de arquivos e câmera podem ser salvas e carregadas automaticamente via JSON.
 
-* `num_epochs`, número de épocas de treinamento
-* `num_batch_size`, isto indica que vamos enviar de 32 em 32 recursos de áudio (32, 64, 96, 128,...8732)
+### Recomendações Gerais
 
-ModelCheckpoint, para salvar o modelo enquanto faz o treinamento
+- Sempre aplique o mesmo pré-processamento nas imagens de treino e teste.
+- Mantenha o dataset equilibrado entre as classes.
+- Teste diferentes arquiteturas e parâmetros para encontrar o melhor desempenho.
+- Documente os resultados dos folds para facilitar futuras análises e compartilhamento com a equipe.
 
-* `filepath`, caminho onde será salvo o modelo. Para isto temos uma pasta no Drive chamada *saved_models*
-* `verbose`, mostrar mensagens enquanto a rede neural é treinada
-* `save_best_only = True`, para salvar o modelo somente quando houver uma melhora no resultado
+---
 
-Variáveis para efetuar a contagem do tempo de treinamento:
+## Exemplos de Scripts Úteis
 
-* `start`, pegando o horário atual de início do treinamento;
-* `duration`, ao final do treinamento, subtrair a hora atual com hora de início do treinamento.
+### Processamento em lote de imagens
 
-* `model_history` para armazenar o histórico de treinamento:
-* `model.fit` para fazer o ajuste do pesos ao longo do treinamento
-  * `X_train`, `Y_train`, dados de treinamento
-  * `batch_size = num_batch_size` que definimos acima
-  * `epochs = num_epochs` que também definimos acima
-  * `validation_data=(X_test, Y_test)`, dados de teste para monitorarmos como está o percentual de acerto da rede neural a cada época
-  * `callbacks=[checkpointer]`, checkpointer definido anteriormente
-  * `verbose = 1`, para mostrar as mensagens
-  
+```python
+import os
+import cv2
+import numpy as np
+
+def process_images(input_dir, output_dir):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    for root, _, files in os.walk(input_dir):
+        for file in files:
+            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                img_path = os.path.join(root, file)
+                img = cv2.imread(img_path)
+                if img is None:
+                    print(f"Erro ao ler {img_path}")
+                    continue
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                eq = cv2.equalizeHist(gray)
+                blur = cv2.GaussianBlur(eq, (3, 3), 0)
+                edges = cv2.Canny(blur, 120, 250)
+                img_out = img.copy()
+                img_out[edges > 0] = [0, 0, 255]  # destaca contornos em vermelho
+                out_path = os.path.join(output_dir, file)
+                cv2.imwrite(out_path, img_out)
+                print(f"Processado: {out_path}")
+
+if __name__ == "__main__":
+    input_dir = input("Digite o diretório de entrada das imagens: ")
+    output_dir = input("Digite o diretório de saída para imagens processadas: ")
+    process_images(input_dir, output_dir)
+```
+
+---
+
+## Referências
+
+- [Dropout: A Simple Way to Prevent Neural Networks from Overfitting](https://jmlr.org/papers/volume15/srivastava14a/srivastava14a.pdf)
+- [Padding em CNNs](https://www.pico.net/kb/what-is-the-difference-between-same-and-valid-padding-in-tf-nn-max-pool-of-tensorflow/)
+- [Freesound Dataset](https://zenodo.org/record/1203745/files/UrbanSound8K.tar.gz)
+- [Como gerenciar diversas versões do Python e ambientes virtuais](https://www.freecodecamp.org/portuguese/news/como-gerenciar-diversas-versoes-do-python-e-ambientes-virtuais/)
+
+---
+
+## Observações Finais
+
+Este documento reúne as principais práticas e decisões tomadas durante o desenvolvimento e testes do sistema de detecção de imagem e áudio. Use-o como referência para futuras consultas ou para orientar novos membros da equipe sobre o funcionamento e os processos do projeto.
