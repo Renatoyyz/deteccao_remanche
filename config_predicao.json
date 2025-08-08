@@ -1,8 +1,8 @@
 {
-    "model_path": "/Volumes/RenatoDados/deteccao_remanche/saved_models4/image_classification_fold-4.keras",
-    "class_txt_path": "/Volumes/RenatoDados/deteccao_remanche/saved_models4/label_encoder_img_fold-4.txt",
-    "precisao_path": "/Volumes/RenatoDados/deteccao_remanche/saved_models4/precisao_fold-4.npy",
-    "precisao_val_path": "/Volumes/RenatoDados/deteccao_remanche/saved_models4/precisao_val-4.npy",
-    "json_path": "/Volumes/RenatoDados/deteccao_remanche/areas_vertical_horizontal.json",
+    "model_path": "/Volumes/RenatoDados/deteccao_remanche/model_final/image_classification_fold-4.keras",
+    "class_txt_path": "/Volumes/RenatoDados/deteccao_remanche/model_final/label_encoder_img_fold-4.txt",
+    "precisao_path": "/Volumes/RenatoDados/deteccao_remanche/model_final/precisao_fold-4.npy",
+    "precisao_val_path": "/Volumes/RenatoDados/deteccao_remanche/model_final/precisao_val-4.npy",
+    "json_path": "/Volumes/RenatoDados/deteccao_remanche/model_final/areas_vertical_horizontal.json",
     "camera_index": 0
 }
